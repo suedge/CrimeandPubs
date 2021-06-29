@@ -1,0 +1,97 @@
+--This query executes the names of the pubs and orders them into the different boroughs
+SELECT pd.ogc_fid,pd.name,dbb.name,dbb.ogc_fid
+FROM pubsdurham as pd, durhamboroughs as dbb
+where ST_CONTAINS(dbb.wkb_geometry,pd.wkb_geometry) ORDER BY dbb.name;
+
+--This adds another column that allows us to amalgamate the number of pubs into the durhamboroughs table 
+ALTER TABLE durhamboroughs ADD COLUMN NumPubs INTEGER DEFAULT 0;
+
+--This query amalgamates the counts of pubs into the individual boroughs
+
+SELECT dbb.ogc_fid, dbb.name, count(*) as numpubsinboroughs 
+FROM pubsdurham as pd, durhamboroughs as dbb
+where ST_CONTAINS(dbb.wkb_geometry,pd.wkb_geometry)
+GROUP BY dbb.ogc_fid order by numpubsinboroughs desc;
+
+--This query enables the use of choloropleth mapping to be implemented within qgis
+(Choloropleth for the number of pubs within each borough)
+
+With PolygonQuery as (
+    SELECT dbb.ogc_fid, dbb.name, count(*) as numpubsinboroughs 
+    FROM pubsdurham as pd, durhamboroughs as dbb
+    where ST_CONTAINS(dbb.wkb_geometry,pd.wkb_geometry)
+    GROUP BY dbb.ogc_fid
+)
+UPDATE durhamboroughs
+SET NumPubs = PolygonQuery.numpubsinboroughs 
+FROM PolygonQuery 
+WHERE durhamboroughs.ogc_fid = PolygonQuery.ogc_fid;
+
+select * from durhamboroughs
+
+----------------------------------------------------------------------
+
+
+--This adds another column that allows us to amalgamate the number of crimes into the durhamboroughs table
+
+ALTER TABLE durhamboroughs ADD COLUMN Numcrime INTEGER DEFAULT 0;
+
+--This query amalgamates the counts of crimes into the individual buroughs
+
+SELECT dc.ogc_fid, dc.crimetype, count(*) as numcrimeinboroughs
+FROM durhamcrimes2019 as dc, durhamboroughs as dbb
+where ST_CONTAINS(dbb.wkb_geometry,dc.wkb_geometry)
+GROUP BY dc.ogc_fid;
+
+
+--This query enables the use of choloropleth mapping to be implemented within qgis
+(Choloropleth for the number of crimes within each borough)
+
+With PolygonQuery as (
+    SELECT dbb.ogc_fid, dbb.name, count(*) as numcrimesinboroughs 
+    FROM durhamcrimes2019 as dc, durhamboroughs as dbb
+    where ST_CONTAINS(dbb.wkb_geometry,dc.wkb_geometry)
+    GROUP BY dbb.ogc_fid
+)
+UPDATE durhamboroughs
+SET Numcrime = PolygonQuery.numcrimesinboroughs 
+FROM PolygonQuery 
+WHERE durhamboroughs.ogc_fid = PolygonQuery.ogc_fid;
+
+select * from durhamboroughs order by numcrime desc
+
+-----------------------------------------------------------------------------------------------
+--Shows the crimetypes in descending order
+
+SELECT crimetype, Count(*) as numcrime from durhamcrimes2019 group by crimetype ORDER BY numcrime desc
+
+--looking at the areas where violent and sexual offences occur
+
+SELECT * from durhamcrimes2019 where crimetype ~'.*Violence and sexual offences.*' 
+
+--Looking at the distance between crime and pubs
+
+SELECT A.ogc_fid as crimedist,A.crimetype,A.location,B.ogc_fid as pubsdist,B.name,B.address, 
+ST_Transform(A.wkb_geometry,32630) <-> ST_Transform(B.wkb_geometry,32630) as DISTANCE
+FROM durhamcrimes2019 as A, pubsdurham as B
+ORDER BY DISTANCE asc;
+
+select * from pubsdurham where name ~ '.*Poison / Ore.*'
+select * from durhamcrimes2019 where crimetype ~'.*Public order.*' and location ~'.*On or near Nightclub.*'
+
+--How many crimes are there within a 5km radius of the centre of Durham?
+SELECT * from durhamcrimes2019 where ST_Distance(ST_Transform(wkb_geometry,32630),St_Transform(St_GeomFromText('POINT(-1.574478 54.775742)',4326),32630)) <= 5000
+--749 crimes
+
+--How many pubs are within a 5km radius of the centre of Durham?
+SELECT * from pubsdurham where ST_Distance(ST_Transform(wkb_geometry,32630),St_Transform(St_GeomFromText('POINT(-1.574478 54.775742)',4326),32630)) <= 5000
+--30 Pubs
+
+--How many crimes are within a 5km radius to the centre of Darlington?
+SELECT * from durhamcrimes2019 where ST_Distance(ST_Transform(wkb_geometry,32630),St_Transform(St_GeomFromText('POINT(-1.553879 54.524668)',4326),32630)) <= 5000
+--1261 Crimes
+
+--How many pubs are within a 5km radius the the centre of Darlington?
+SELECT * from pubsdurham where ST_Distance(ST_Transform(wkb_geometry,32630),St_Transform(St_GeomFromText('POINT(-1.553879 54.524668)',4326),32630)) <= 5000
+--37 Pubs
+
